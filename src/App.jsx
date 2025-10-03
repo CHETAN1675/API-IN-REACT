@@ -1,15 +1,54 @@
-import  { useState,Fragment,useEffect } from "react";
+import  { useState, useEffect, useCallback, useMemo,Fragment } from "react";
 import MoviesList from "./components/MoviesList";
 import "./App.css";
 
 function App() {
   const [movies, setMovies] = useState([]);
-   const [isLoading, setIsloading] = useState(false);
-   const [error, setError] = useState(null);
+  const [isLoading, setIsloading] = useState(false);
+  const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [retryIntervalId, setRetryIntervalId] = useState(null);
 
-    useEffect(() => {
+  const fetchMoviesHandler = useCallback(async () => {
+    setIsloading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("https://swapi.dev/api/films");
+      if (!response.ok) {
+        throw new Error("Something went wrong ....Retrying");
+      }
+
+      const data = await response.json();
+
+      const transformedMovies = data.results.map((movieData) => {
+        return {
+          id: movieData.episode_id,
+          title: movieData.title,
+          openingText: movieData.opening_crawl,
+          releaseDate: movieData.release_date,
+        };
+      });
+
+      setMovies(transformedMovies);
+      setRetryCount(0);
+    } catch (error) {
+      setError(error.message);
+      setRetryCount(retryCount + 1);
+    }
+    setIsloading(false);
+  }, []);
+
+  const cancleRetryHandler = useCallback(() => {
+    clearInterval(retryIntervalId);
+    setRetryCount(0);
+  }, [retryIntervalId]);
+
+  useEffect(() => {
+    fetchMoviesHandler();
+  }, [fetchMoviesHandler]);
+
+  useEffect(() => {
     if (retryCount > 0) {
       setRetryIntervalId(
         setInterval(() => {
@@ -21,73 +60,29 @@ function App() {
     return () => {
       clearInterval(retryIntervalId);
     };
-  }, [retryCount]);
+  }, [retryCount, fetchMoviesHandler]);
 
-    
-
-  async function fetchMoviesHandler() {
-    setIsloading(true); 
-    setError(null);
-    
-    
-try{
-const response = await fetch("https://swapi.dev/api/film");
-  if (!response.ok) {
-        throw new Error("Something went wrong ....Retrying");
-      }
-      const data = await response.json();
-
-       const transformedMovies = data.results.map((movieData) => {
-      return {
-        id: movieData.episode_id,
-        title: movieData.title,
-        openingText: movieData.opening_crawl,
-        releaseDate: movieData.release_date,
-      };
-    });
-
-    setMovies(transformedMovies);
-    setRetryCount(0);
-    } catch (error) {
-      setError(error.message);
-      setRetryCount(retryCount + 1);
+  const content = useMemo(() => {
+    if (movies.length > 0) {
+      return <MoviesList movies={movies} />;
+    } else if (error) {
+      return (
+        <Fragment>
+          <p>{error}</p>
+          <button onClick={fetchMoviesHandler}>Retry</button>
+          <button onClick={cancleRetryHandler}>Cancel</button>
+        </Fragment>
+      );
+    } else if (isLoading) {
+      return <p>Loading....</p>;
+    } else {
+      return <p>Found No Movies.</p>;
     }
-    setIsloading(false);
-  }
-
-    function cancleRetryHandler() {
-    clearInterval(retryIntervalId);
-    setRetryCount(0);
-  }
-
-  let content = <p>Found No Movies.</p>;
-
-  if (movies.length > 0) {
-   content = <MoviesList movies={movies} />;
-  }
-
-  if (error) {
-    content = (
-      <Fragment>
-        <p>{error}</p>
-        <button onClick={fetchMoviesHandler}>Retry</button>
-        <button onClick={cancleRetryHandler}>Cancel</button>
-      </Fragment>
-    );
-  }
-
-  if (isLoading) {
-    content = <p>Loading...</p>;
-  }
+  }, [movies, error, isLoading, fetchMoviesHandler, cancleRetryHandler]);
 
   return (
     <Fragment>
-      <section>
-        <button onClick={fetchMoviesHandler}>Fetch Movies</button>
-      </section>
-      <section>
-        {content}
-      </section>
+      <section>{content}</section>
     </Fragment>
   );
 }
